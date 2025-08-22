@@ -9,7 +9,8 @@ namespace Currency.Application.Interfaces
 {
     public interface ICurrencyService
     {
-        Task<RateResponse> GetLatestRatesAsync(string? baseCurrency, string? symbols = null, DateTime? startDate = null, DateTime? endDate = null);
-        Task<decimal> ConvertCurrencyAsync(string from, string to, decimal amount);
+        Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest);
+        Task<HistoricalRateResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest);
+        Task<decimal> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest);
     }
 }

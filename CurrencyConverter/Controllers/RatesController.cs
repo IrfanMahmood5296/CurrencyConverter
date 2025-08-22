@@ -1,48 +1,66 @@
 ﻿using Currency.Application.Interfaces;
+using Currency.Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CurrencyConverter.Web.Controllers
 {
-    [Authorize]
-    [Route("Rates")]
     public class RatesController : Controller
     {
-        private readonly ICurrencyService _currencyService;
-        public RatesController(ICurrencyService currencyService)
+        private readonly HttpClient _httpClient;
+        public RatesController(IHttpClientFactory httpClientFactory)
         {
-            _currencyService = currencyService;
+            _httpClient = httpClientFactory.CreateClient("CurrencyApi");
         }
+
         public IActionResult Index()
         {
-            return View();
+            return View("Latest");
         }
 
-        [HttpGet("GetLatestRatesAsync")]
-        //[Authorize(Roles = "reader,admin")]
-        public async Task<IActionResult> GetLatestRatesAsync(string? baseCurrency, string? symbols = null, DateTime? startDate = null, DateTime? endDate = null)
+        public async Task<IActionResult> Latest(string? baseCurrency, string? symbols, DateTime? startDate = null)
         {
-            var result = await _currencyService.GetLatestRatesAsync(baseCurrency, symbols, startDate, endDate);
-            return View("Latest", result);
-        }
-
-        [HttpGet("convert")]
-        public async Task<IActionResult> Convert([FromQuery] string from, [FromQuery] string to, [FromQuery] decimal amount)
-        {
-            try
+            var response = await _httpClient.PostAsJsonAsync("Rates/GetLatestRatesAsync", new
             {
-                var result = await _currencyService.ConvertCurrencyAsync(from, to, amount);
-                return Ok(new
-                {
-                    From = from,
-                    To = to,
-                    Amount = amount,
-                    ConvertedAmount = result
-                });
+                BaseCurrency = baseCurrency,
+                Symbols = symbols,
+                StartDate= startDate
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var rates = await response.Content.ReadFromJsonAsync<RateResponse>();
+                return View("Latest",rates); 
             }
-            catch (Exception ex)
+            else
             {
-                return BadRequest(new { error = ex.Message });
+                ModelState.AddModelError("", "Failed to fetch rates");
+                return View("Latest");
+            }
+
+        }
+
+        public async Task<IActionResult> GetHistoricalExchangeRates(string? baseCurrency, string? symbols, DateTime? startDate = null, DateTime? endDate = null)
+        {
+            DateTime now = DateTime.Now;
+
+            var response = await _httpClient.PostAsJsonAsync("Rates/GetHistoricalExchangeRates", new
+            {
+                BaseCurrency = baseCurrency,
+                Symbols = symbols,
+                StartDate = startDate ?? new DateTime(now.Year, 1, 1),
+                EndDate = endDate ?? new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month))
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var rates = await response.Content.ReadFromJsonAsync<HistoricalRateResponse>();
+                return View("HistoricalExchangeRatesView", rates); 
+            }
+            else
+            {
+                ModelState.AddModelError("", "Failed to fetch rates");
+                return View("HistoricalExchangeRatesView",new  HistoricalRateResponse());
             }
         }
 

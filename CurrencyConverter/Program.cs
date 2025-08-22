@@ -18,7 +18,14 @@ if (string.IsNullOrEmpty(key))
 
 builder.Services.AddHttpClient();
 
-builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+builder.Services.AddDistributedMemoryCache();
+
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30); // session timeout
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
 
 builder.Services.AddAuthentication(options =>
 {
@@ -43,6 +50,13 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+var apiBaseUrl = builder.Configuration["CurrencyApi:BaseUrl"];
+
+builder.Services.AddHttpClient("CurrencyApi", client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl!);
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -60,7 +74,7 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
+app.UseSession();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Login}/{action=Index}/{id?}");

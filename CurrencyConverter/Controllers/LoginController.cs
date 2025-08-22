@@ -1,4 +1,5 @@
 ﻿using Currency.Application.Helpers;
+using Currency.Application.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -8,50 +9,39 @@ namespace CurrencyConverter.Web.Controllers
 {
     public class LoginController : Controller
     {
-        private readonly IConfiguration _configuration;
-        public LoginController(IConfiguration configuration)
+        private readonly HttpClient _httpClient;
+
+        public LoginController(IHttpClientFactory httpClientFactory)
         {
-            _configuration = configuration;
+            _httpClient = httpClientFactory.CreateClient("CurrencyApi");
         }
 
+        [HttpGet]
         public IActionResult Index()
         {
-            return View("Login");
+            return View("Login"); 
         }
 
         [HttpPost]
         public async Task<IActionResult> Index(string username, string password)
         {
-            if (username == "admin" && password == "password")
+            var response = await _httpClient.PostAsJsonAsync("Login", new { Username = username, Password = password });
+
+            if (response.IsSuccessStatusCode)
             {
-                // Generate JWT
-                var token = JwtTokenHelper.GenerateJwtToken(username, _configuration);
-
-                // Create ClaimsPrincipal
-                var claims = new List<Claim>
+                var data = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                if (data != null)
                 {
-                    new Claim(ClaimTypes.Name, username),
-                    new Claim("JwtToken", token) // save JWT inside claim
-                };
+                    HttpContext.Session.SetString("JwtToken", data.Token);
+                    var user = data.Username;
+                }
+                
 
-                var claimsIdentity = new ClaimsIdentity(
-                    claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-                await HttpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    new ClaimsPrincipal(claimsIdentity));
-
-                return RedirectToAction("GetLatestRatesAsync", "Rates");
+                return RedirectToAction("Latest", "Rates");
             }
 
-            ViewBag.Error = "Invalid credentials";
+            ViewBag.Error = "Invalid login";
             return View("Login");
-        }
-
-        public async Task<IActionResult> Logout()
-        {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Index", "Login");
         }
     }
 }

@@ -2,20 +2,37 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Currency.Application.Models
 {
     public class RateResponse
     {
-        public DateTime? Date { get; set; } 
-        public DateTime? DateTo { get; set; }
+        [JsonPropertyName("base")]
+        public string BaseCurrency { get; set; } = string.Empty;
+
+        [JsonPropertyName("date")]
+        public DateTime Date { get; set; }
+
+        [JsonPropertyName("rates")]
         public Dictionary<string, decimal> Rates { get; set; } = new();
-        public Dictionary<string, Dictionary<string, decimal>>? HistoricalRates { get; set; }
+
     }
 
     public class HistoricalRateResponse
     {
-        public Dictionary<string, Dictionary<string, decimal>>? Rates { get; set; }
+        [JsonPropertyName("base")]
+        public string BaseCurrency { get; set; } = string.Empty;
+
+        [JsonPropertyName("start_date")]
+        public DateTime? Date { get; set; }
+
+        [JsonPropertyName("end_date")]
+        public DateTime? DateTo { get; set; }
+
+        [JsonPropertyName("rates")]
+        public Dictionary<string, Dictionary<string, decimal>> HistoricalRates { get; set; }
+            = new();
     }
 }
