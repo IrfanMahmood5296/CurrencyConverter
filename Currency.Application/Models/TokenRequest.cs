@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 
 namespace Currency.Application.Models
 {
-    public class LoginRequest
+    public class TokenRequest
     {
         public required string Username { get; set; }
         public required string Password { get; set; }
+        public required string ClientId { get; set; }
+        public required string ClientSecret { get; set; }
     }
 }

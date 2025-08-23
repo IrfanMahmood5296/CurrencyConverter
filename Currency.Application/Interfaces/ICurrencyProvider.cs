@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 
 namespace Currency.Application.Interfaces
 {
-    public interface ICurrencyService
+    public interface ICurrencyProvider
     {
         Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest);
         Task<HistoricalRateResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest);
-        Task<decimal> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest);
+        Task<ConvertExchangeRatesRequest> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest);
     }
 }

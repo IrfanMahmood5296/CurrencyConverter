@@ -35,7 +35,6 @@ namespace CurrencyConverter.Web.Controllers
                     HttpContext.Session.SetString("JwtToken", data.Token);
                     var user = data.Username;
                 }
-                
 
                 return RedirectToAction("Latest", "Rates");
             }

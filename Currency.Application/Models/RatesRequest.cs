@@ -8,7 +8,7 @@ namespace Currency.Application.Models
 {
     public class RatesRequest
     {
-        public string? BaseCurrency { get; set; } = "EUR";
+        public string? BaseCurrency { get; set; } 
         public string? Symbols { get; set; } = null;
         public DateTime? StartDate { get; set; } = null;
     }

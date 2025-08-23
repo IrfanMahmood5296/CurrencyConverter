@@ -1,6 +1,5 @@
 ﻿using Currency.Application.Interfaces;
 using Currency.Application.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Currency.WebApi.Controllers
@@ -9,23 +8,37 @@ namespace Currency.WebApi.Controllers
     [ApiController]
     public class RatesController : ControllerBase
     {
-        private readonly ICurrencyService _currencyService;
-        public RatesController(ICurrencyService currencyService)
+        private readonly IProviderFactoryService _providerFactoryService;
+        public RatesController(IProviderFactoryService providerFactoryService)
         {
-            _currencyService = currencyService;
+            _providerFactoryService = providerFactoryService;
         }
 
         [HttpPost("GetLatestRatesAsync")]
         public async Task<IActionResult> GetLatestRatesAsync([FromBody] RatesRequest ratesRequest)
         {
-            var result = await _currencyService.GetLatestRatesAsync(ratesRequest);
+            var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
+
+            if (string.IsNullOrEmpty(providerName))
+                return BadRequest("Currency provider not assigned to user.");
+
+            var service = _providerFactoryService.GetRequiredService(providerName);
+
+            var result = await service.GetLatestRatesAsync(ratesRequest);
             return Ok(result);
         }
 
         [HttpPost("GetHistoricalExchangeRates")]
         public async Task<IActionResult> GetHistoricalExchangeRates([FromBody] HistoricalRequest ratesRequest)
         {
-            var result = await _currencyService.GetHistoricalExchangeRates(ratesRequest);
+            var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
+
+            if (string.IsNullOrEmpty(providerName))
+                return BadRequest("Currency provider not assigned to user.");
+
+            var service = _providerFactoryService.GetRequiredService(providerName);
+
+            var result = await service.GetHistoricalExchangeRates(ratesRequest);
             return Ok(result);
         }
 
@@ -34,11 +47,15 @@ namespace Currency.WebApi.Controllers
         {
             try
             {
-                var result = await _currencyService.ConvertCurrencyAsync(ratesRequest);
-                return Ok(new
-                {
-                    ConvertedAmount = result
-                });
+                var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
+
+                if (string.IsNullOrEmpty(providerName))
+                    return BadRequest("Currency provider not assigned to user.");
+
+                var service = _providerFactoryService.GetRequiredService(providerName);
+
+                var result = await service.ConvertCurrencyAsync(ratesRequest);
+                return Ok(result);
             }
             catch (Exception ex)
             {

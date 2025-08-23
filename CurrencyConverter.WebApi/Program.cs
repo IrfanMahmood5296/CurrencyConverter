@@ -1,25 +1,17 @@
-using Currency.Application.Interfaces;
-using Currency.Application.Services;
-using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using Currency.Application.Helpers.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddHttpClient();
-
-builder.Services.AddScoped<ICurrencyService, RateService>();
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-});
+builder.Services.AddCurrencyProviders();
+builder.Services.AddIdentityServerConfig();
+builder.Services.AddSwaggerWithAuth();
 
 
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
@@ -31,10 +23,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseIdentityServer();
+
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireAuthorization("ApiScope");
 
 app.Run();

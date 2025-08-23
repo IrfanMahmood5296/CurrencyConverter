@@ -1,5 +1,6 @@
 ﻿using Currency.Application.Interfaces;
 using Currency.Application.Models;
+using Currency.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,26 +19,30 @@ namespace CurrencyConverter.Web.Controllers
             return View("Latest");
         }
 
+        public IActionResult CurrencyConversion()
+        {
+            return View("CurrencyConversion");
+        }
+
         public async Task<IActionResult> Latest(string? baseCurrency, string? symbols, DateTime? startDate = null)
         {
             var response = await _httpClient.PostAsJsonAsync("Rates/GetLatestRatesAsync", new
             {
                 BaseCurrency = baseCurrency,
                 Symbols = symbols,
-                StartDate= startDate
+                StartDate = startDate
             });
 
             if (response.IsSuccessStatusCode)
             {
                 var rates = await response.Content.ReadFromJsonAsync<RateResponse>();
-                return View("Latest",rates); 
+                return View("Latest", rates);
             }
             else
             {
                 ModelState.AddModelError("", "Failed to fetch rates");
                 return View("Latest");
             }
-
         }
 
         public async Task<IActionResult> GetHistoricalExchangeRates(string? baseCurrency, string? symbols, DateTime? startDate = null, DateTime? endDate = null)
@@ -55,14 +60,44 @@ namespace CurrencyConverter.Web.Controllers
             if (response.IsSuccessStatusCode)
             {
                 var rates = await response.Content.ReadFromJsonAsync<HistoricalRateResponse>();
-                return View("HistoricalExchangeRatesView", rates); 
+                return View("HistoricalExchangeRatesView", rates);
             }
+
             else
             {
                 ModelState.AddModelError("", "Failed to fetch rates");
-                return View("HistoricalExchangeRatesView",new  HistoricalRateResponse());
+                return View("HistoricalExchangeRatesView", new HistoricalRateResponse());
             }
         }
+
+        public async Task<IActionResult> Convert(string from, string to, decimal amount)
+        {
+            if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to) || amount <= 0)
+            {
+                ModelState.AddModelError("", "Invalid input values.");
+                return View("CurrencyConversion");
+            }
+
+            var response = await _httpClient.PostAsJsonAsync("Rates/ConvertExchangeRates", new
+            {
+                From = from,
+                To = to,
+                Amount = amount,
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var rates = await response.Content.ReadFromJsonAsync<ConvertExchangeRatesRequest>();
+                return View("CurrencyConversion", rates);
+            }
+
+            else
+            {
+                ModelState.AddModelError("", "Failed to fetch rates");
+                return View("CurrencyConversion");
+            }
+        }
+
 
     }
 }

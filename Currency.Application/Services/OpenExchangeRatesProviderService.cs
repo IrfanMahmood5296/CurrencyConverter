@@ -1,28 +1,23 @@
 ﻿using Currency.Application.Interfaces;
 using Currency.Application.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using System.Net.Http.Json;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Currency.Application.Services
 {
-    public class RateService : ICurrencyService
+    [Authorize]
+    public class OpenExchangeRatesProviderService: ICurrencyProvider
     {
         private readonly HttpClient _httpClient;
-
-        public RateService(HttpClient httpClient)
+        public OpenExchangeRatesProviderService(HttpClient httpClient)
         {
             _httpClient = httpClient;
-
-            _httpClient.BaseAddress = new Uri("https://api.frankfurter.app/");
+            _httpClient.BaseAddress = new Uri("https://api.exchangerate-api.com/v4/");
         }
 
         public async Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
         {
-            string endpoint ;
+            string endpoint;
 
             if (ratesRequest.StartDate.HasValue)
             {
@@ -34,8 +29,6 @@ namespace Currency.Application.Services
             }
 
             var queryParams = new List<string>();
-            if (!string.IsNullOrWhiteSpace(ratesRequest.BaseCurrency))
-                queryParams.Add($"base={ratesRequest.BaseCurrency}");
 
             if (!string.IsNullOrWhiteSpace(ratesRequest.Symbols))
                 queryParams.Add($"symbols={ratesRequest.Symbols}");
@@ -54,7 +47,7 @@ namespace Currency.Application.Services
         {
             string endpoint;
 
-            if (ratesRequest.StartDate.HasValue && ratesRequest.EndDate.HasValue )
+            if (ratesRequest.StartDate.HasValue && ratesRequest.EndDate.HasValue)
             {
                 endpoint = $"{ratesRequest.StartDate:yyyy-MM-dd}..{ratesRequest.EndDate:yyyy-MM-dd}";
             }
@@ -64,6 +57,7 @@ namespace Currency.Application.Services
             }
 
             var queryParams = new List<string>();
+
             if (!string.IsNullOrWhiteSpace(ratesRequest.BaseCurrency))
                 queryParams.Add($"base={ratesRequest.BaseCurrency}");
 
@@ -85,7 +79,7 @@ namespace Currency.Application.Services
             };
         }
 
-        public async Task<decimal> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
+        public async Task<ConvertExchangeRatesRequest> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
         {
             if (string.IsNullOrWhiteSpace(ratesRequest.From) || string.IsNullOrWhiteSpace(ratesRequest.To))
                 throw new ArgumentException("Currency codes must be provided.");
@@ -94,10 +88,17 @@ namespace Currency.Application.Services
             var endpoint = $"latest?base={ratesRequest.From}&symbols={ratesRequest.To}";
             var response = await _httpClient.GetFromJsonAsync<RateResponseDto>(endpoint);
 
-            if (response == null || !response.Rates.ContainsKey(ratesRequest.To))
+            if (response == null)
                 throw new Exception("Failed to fetch conversion rate.");
 
-            return Math.Round(ratesRequest.Amount * response.Rates[ratesRequest.To], 2);
+            return new ConvertExchangeRatesRequest
+            {
+                Date = response.Date,
+                From = ratesRequest.From,
+                To = ratesRequest.To,
+                Amount = ratesRequest.Amount,
+                ConvertedAmounts = response.Rates.ToDictionary(kvp => kvp.Key, kvp => Math.Round(ratesRequest.Amount * kvp.Value, 2))
+            };
         }
     }
 }
