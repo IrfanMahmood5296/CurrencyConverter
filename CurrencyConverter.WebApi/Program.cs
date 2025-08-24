@@ -10,7 +10,7 @@ builder.Services.AddRedis(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-
+builder.Logging.AddFile();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
