@@ -1,5 +1,8 @@
 ﻿using Currency.Application.Interfaces;
+using Currency.Application.Interfaces.Redis;
 using Currency.Application.Services;
+using Currency.Application.Services.Redis;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
 using System;
@@ -15,15 +18,16 @@ namespace Currency.Application.Helpers.Extensions
         public static IServiceCollection AddCurrencyProviders(this IServiceCollection services)
         {
             services.AddHttpClient();
-            services.AddTransient<ICurrencyProvider, OpenExchangeRatesProviderService>();
-            services.AddTransient<ICurrencyProvider, FrankFurterProviderService>();
+            services.AddTransient<OpenExchangeRatesProviderService>();
+            services.AddTransient<FrankFurterProviderService>();
             services.AddScoped<IProviderFactoryService, ProviderFactoryService>();
             services.AddHttpContextAccessor();
+            services.AddScoped<IRedisCacheService, RedisCacheService>();
 
             return services;
         }
 
-        public static IServiceCollection AddIdentityServerConfig(this IServiceCollection services)
+        public static IServiceCollection AddIdentityServerConfig(this IServiceCollection services, IConfiguration _configuration)
         {
             services.AddIdentityServer()
                 .AddInMemoryClients(Config.Clients)
@@ -37,7 +41,7 @@ namespace Currency.Application.Helpers.Extensions
             services.AddAuthentication("Bearer")
                 .AddJwtBearer("Bearer", options =>
                 {
-                    options.Authority = "https://localhost:7248";
+                    options.Authority = _configuration["IdentityServerConfig:Authority"]!;
                     options.RequireHttpsMetadata = false;
                     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
                     {
@@ -85,6 +89,16 @@ namespace Currency.Application.Helpers.Extensions
                         new string[] {}
                     }
                 });
+            });
+
+            return services;
+        }
+
+        public static IServiceCollection AddRedis(this IServiceCollection services, IConfiguration _configuration)
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = _configuration["RedisServerConfig:Authority"]!; 
             });
 
             return services;

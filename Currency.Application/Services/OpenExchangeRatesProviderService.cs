@@ -1,6 +1,7 @@
 ﻿using Currency.Application.Interfaces;
 using Currency.Application.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
 using System.Net.Http.Json;
 
 namespace Currency.Application.Services
@@ -8,35 +9,24 @@ namespace Currency.Application.Services
     [Authorize]
     public class OpenExchangeRatesProviderService: ICurrencyProvider
     {
+        private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
-        public OpenExchangeRatesProviderService(HttpClient httpClient)
+        private string? _appId;
+        public OpenExchangeRatesProviderService(HttpClient httpClient, IConfiguration configuration)
         {
             _httpClient = httpClient;
-            _httpClient.BaseAddress = new Uri("https://api.exchangerate-api.com/v4/");
+            _httpClient.BaseAddress = new Uri("https://v6.exchangerate-api.com/v6/");
+            _configuration = configuration;
+            _appId = _configuration["OpenExchangeRates:AppId"];
         }
 
         public async Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
         {
-            string endpoint;
-
-            if (ratesRequest.StartDate.HasValue)
-            {
-                endpoint = $"{ratesRequest.StartDate:yyyy-MM-dd}";
-            }
-            else
-            {
-                endpoint = "latest";
-            }
-
-            var queryParams = new List<string>();
-
-            if (!string.IsNullOrWhiteSpace(ratesRequest.Symbols))
-                queryParams.Add($"symbols={ratesRequest.Symbols}");
-
-            if (queryParams.Any())
-                endpoint += "?" + string.Join("&", queryParams);
+            var endpoint = $"{_appId}/latest/{ratesRequest.BaseCurrency}";
+            var queryParams = new List<string> { $"app_id={_appId}" };
 
             var response = await _httpClient.GetFromJsonAsync<RateResponse>(endpoint);
+
             if (response == null)
                 throw new Exception("Failed to fetch currency rates.");
 

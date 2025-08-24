@@ -4,10 +4,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddCurrencyProviders();
-builder.Services.AddIdentityServerConfig();
+builder.Services.AddIdentityServerConfig(builder.Configuration);
 builder.Services.AddSwaggerWithAuth();
-
-
+builder.Services.AddRedis(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

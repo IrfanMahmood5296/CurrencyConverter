@@ -18,8 +18,8 @@ namespace Currency.Application.Services
         {
             return providerName.ToLower() switch
             {
-                "frankfurter" => _serviceProvider.GetRequiredService<ICurrencyProvider>(),
-                "openexchange" => _serviceProvider.GetRequiredService<ICurrencyProvider>(),
+                "frankfurter" => _serviceProvider.GetRequiredService<FrankFurterProviderService>(),
+                "openexchange" => _serviceProvider.GetRequiredService<OpenExchangeRatesProviderService>(),
                 _ => throw new NotSupportedException($"Provider {providerName} is not supported.")
             };
         }

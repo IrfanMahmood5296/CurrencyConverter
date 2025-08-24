@@ -19,43 +19,26 @@ namespace Currency.WebApi.Controllers
             _configuration = configuration;
         }
 
-        [HttpPost]
-        public IActionResult Login([FromBody] LoginRequest request)
-        {
-            if (request.Username == "admin" && request.Password == "password")
-            {
-                var token = JwtTokenHelper.GenerateJwtToken(request.Username, _configuration);
-
-                return Ok(new
-                {
-                    Username = request.Username,
-                    Token = token
-                });
-            }
-
-            return Unauthorized(new { error = "Invalid username or password" });
-        }
-
         [AllowAnonymous]
         [HttpPost("GetToken")]
         public async Task<IActionResult> GetToken([FromBody] TokenRequest requestModel)
         {
             if (requestModel == null ||
-            string.IsNullOrEmpty(requestModel.ClientId) || string.IsNullOrEmpty(requestModel.ClientSecret))
+            string.IsNullOrEmpty(requestModel.Username) || string.IsNullOrEmpty(requestModel.Password))
             {
-                return BadRequest("ClientId, ClientSecret, and Scope are required.");
+                return BadRequest("Username, Password are required.");
             }
 
             using var httpClient = new HttpClient();
 
             var keyValues = new List<KeyValuePair<string, string>>
             {
-                new("password", "password2"),
-                new("username", "user2"),
-                new("client_id", "my_client"),
-                new("client_secret", "my_secret"),
+                new("password", requestModel.Password),
+                new("username", requestModel.Username),
+                new("client_id", _configuration["IdentityServerConfig:ClientId"]!),
+                new("client_secret", _configuration["IdentityServerConfig:ClientSecret"]!),
                 new("grant_type", "password"),
-                new("scope", "currency_api")
+                new("scope", _configuration["IdentityServerConfig:currency_api"]!)
             };
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://localhost:7248/connect/token")
