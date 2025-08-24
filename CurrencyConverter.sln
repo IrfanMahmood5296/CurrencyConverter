@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Currency.Application", "Cur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Currency.WebApi", "CurrencyConverter.WebApi\Currency.WebApi.csproj", "{374C4EC4-3A13-440E-A3A8-248C3919617F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CurrencyConverterTests", "CurrencyConverterTests\CurrencyConverterTests.csproj", "{C246D383-BED8-467C-86CB-5D07E12E04C4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Currency.Tests", "CurrencyConverterTests\Currency.Tests.csproj", "{C246D383-BED8-467C-86CB-5D07E12E04C4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Currency.WebApi.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class RatesController : ControllerBase
@@ -21,9 +22,9 @@ namespace Currency.WebApi.Controllers
             _providerFactoryService = providerFactoryService;
             _cacheService = cacheService;
             _logger = logger;
-
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPost("GetLatestRatesAsync")]
         public async Task<IActionResult> GetLatestRatesAsync([FromBody] RatesRequest ratesRequest)
         {
@@ -58,12 +59,13 @@ namespace Currency.WebApi.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled exception");
-                return BadRequest(new { error = ex.Message });
+                _logger.LogError(ex, "Unhandled exception while fetching rates");
+                return StatusCode(500, new { Error = "InternalServerError", Message = "An unexpected error occurred.", Details = ex.Message, Timestamp = DateTime.UtcNow });
             }
 
         }
 
+        [Authorize]
         [HttpPost("GetHistoricalExchangeRates")]
         public async Task<IActionResult> GetHistoricalExchangeRates([FromBody] HistoricalRequest ratesRequest)
         {
@@ -88,6 +90,8 @@ namespace Currency.WebApi.Controllers
                     return Ok(cachedResult);
                 }
 
+                _logger.LogInformation("Cache miss for {CacheKey}, fetching from provider", cacheKey);
+
                 var service = _providerFactoryService.GetRequiredService(providerName);
 
                 var result = await service.GetHistoricalExchangeRates(ratesRequest);
@@ -97,11 +101,12 @@ namespace Currency.WebApi.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled exception");
-                return BadRequest(new { error = ex.Message });
+                _logger.LogError(ex, "Unhandled exception while fetching historical exchange rates");
+                return StatusCode(500, new { Error = "InternalServerError", Message = "An unexpected error occurred.", Details = ex.Message, Timestamp = DateTime.UtcNow });
             }
         }
 
+        [Authorize]
         [HttpPost("ConvertExchangeRates")]
         public async Task<IActionResult> Convert([FromBody] ConvertExchangeRatesRequest ratesRequest)
         {
@@ -143,13 +148,7 @@ namespace Currency.WebApi.Controllers
                 _logger.LogError(ex, "Currency conversion failed: {From} to {To}",
                     ratesRequest.From, ratesRequest.To);
 
-                return BadRequest(new
-                {
-                    Error = "ConversionFailed",
-                    Message = "An error occurred during currency conversion",
-                    Details = ex.Message,
-                    Timestamp = DateTime.UtcNow
-                });
+                return StatusCode(500, new { Error = "InternalServerError", Message = "An unexpected error occurred.", Details = ex.Message, Timestamp = DateTime.UtcNow });
             }
         }
     }
