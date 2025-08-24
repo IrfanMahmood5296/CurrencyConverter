@@ -22,7 +22,11 @@ namespace Currency.Application.Helpers
         [
             new ApiScope("currency_api", "Currency API")
             {
-                UserClaims = { "currency_provider" } 
+                UserClaims =
+                {
+                    "currency_provider",
+                    JwtClaimTypes.Role
+                }
             }
         ];
 
@@ -31,14 +35,20 @@ namespace Currency.Application.Helpers
             new ApiResource("currency_api", "Currency API")
             {
                 Scopes = { "currency_api" },
-                UserClaims = { "currency_provider" }
+                UserClaims =
+                {
+                    "currency_provider",
+                    JwtClaimTypes.Role,
+                }
             }
         ];
 
         public static IEnumerable<IdentityResource> IdentityResources =>
         [
             new IdentityResources.OpenId(),
-            new IdentityResources.Profile()
+            new IdentityResources.Profile(),
+            new IdentityResource("roles", "User roles", new[] { JwtClaimTypes.Role })
+
          ];
 
         public static List<TestUser> Users =>
@@ -50,7 +60,7 @@ namespace Currency.Application.Helpers
                 Password = "password1",
                 Claims =
                 [
-                    new Claim("currency_provider", "openexchange")
+                    new Claim("currency_provider", "openexchange"),
                 ]
             },
             new TestUser
@@ -60,7 +70,8 @@ namespace Currency.Application.Helpers
                 Password = "password2",
                 Claims =
                 [
-                    new Claim("currency_provider", "frankfurter")
+                    new Claim("currency_provider", "frankfurter"),
+                    new Claim(JwtClaimTypes.Role, "Admin")
                 ]
             }
         ];

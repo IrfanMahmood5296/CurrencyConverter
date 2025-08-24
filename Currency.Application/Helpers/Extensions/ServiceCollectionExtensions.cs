@@ -2,6 +2,7 @@
 using Currency.Application.Interfaces.Redis;
 using Currency.Application.Services;
 using Currency.Application.Services.Redis;
+using IdentityModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
@@ -45,7 +46,10 @@ namespace Currency.Application.Helpers.Extensions
                     options.RequireHttpsMetadata = false;
                     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
                     {
-                        ValidateAudience = false
+                        ValidateAudience = true,
+                        ValidAudience = "currency_api",
+                        NameClaimType = "name", 
+                        RoleClaimType = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
                     };
                 });
 
