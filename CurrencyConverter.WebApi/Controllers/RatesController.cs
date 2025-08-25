@@ -4,6 +4,7 @@ using Currency.Application.Interfaces.Redis;
 using Currency.Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
 
 namespace Currency.WebApi.Controllers
@@ -71,6 +72,8 @@ namespace Currency.WebApi.Controllers
         {
             try
             {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
                 var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
 
                 if (string.IsNullOrEmpty(providerName))
@@ -83,11 +86,31 @@ namespace Currency.WebApi.Controllers
 
                 var cacheKey = $"{providerName}:historical:{ratesRequest.StartDate:yyyy-MM-dd}_{ratesRequest.EndDate:yyyy-MM-dd}:{ratesRequest.BaseCurrency ?? ""}_{ratesRequest.Symbols ?? ""}";
 
-                var cachedResult = await _cacheService.GetAsync<object>(cacheKey);
+                var cachedResult = await _cacheService.GetAsync<HistoricalRateResponse>(cacheKey);
                 if (cachedResult != null)
                 {
                     _logger.LogInformation("Cache hit for {CacheKey}", cacheKey);
-                    return Ok(cachedResult);
+                    var all = cachedResult.HistoricalRates?.Select(kv => new HistoricalRateItem
+                    {
+                        Date = DateTime.Parse(kv.Key),
+                        Rates = kv.Value,
+                    }).OrderByDescending(x => x.Date).ToList() ?? new List<HistoricalRateItem>();
+
+                    var total = all.Count;
+                    var totalPages = (int)Math.Ceiling(total / (double)ratesRequest.PageSize);
+
+                    var items = all.Skip((ratesRequest.PageNumber - 1) * ratesRequest.PageSize).Take(ratesRequest.PageSize).ToList();
+                    return Ok(new HistoricalRateResponse
+                    {
+                        BaseCurrency = cachedResult.BaseCurrency,
+                        Date = cachedResult.Date,
+                        DateTo = cachedResult.DateTo,
+                        items = items,
+                        Page = ratesRequest.PageNumber,
+                        PageSize = ratesRequest.PageSize,
+                        TotalItems = total,
+                        TotalPages = totalPages
+                    });
                 }
 
                 _logger.LogInformation("Cache miss for {CacheKey}, fetching from provider", cacheKey);
@@ -95,9 +118,19 @@ namespace Currency.WebApi.Controllers
                 var service = _providerFactoryService.GetRequiredService(providerName);
 
                 var result = await service.GetHistoricalExchangeRates(ratesRequest);
-                await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(1));
+                //await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(1));
 
-                return Ok(result);
+                return Ok(new HistoricalRateResponse
+                {
+                    BaseCurrency = result.BaseCurrency,
+                    Date = result.Date,
+                    DateTo = result.DateTo,
+                    items = result.items,
+                    Page = ratesRequest.PageNumber,
+                    PageSize = ratesRequest.PageSize,
+                    TotalItems = result.TotalItems,
+                    TotalPages = result.TotalPages
+                });
             }
             catch (Exception ex)
             {

@@ -3,15 +3,16 @@
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddCurrencyProviders();
+builder.Services.AddCurrencyProviders(builder.Configuration);
 builder.Services.AddIdentityServerConfig(builder.Configuration);
 builder.Services.AddSwaggerWithAuth();
 builder.Services.AddRedis(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Logging.AddFile();
 builder.Services.AddSwaggerGen();
+
+builder.Host.UseCurrencyLogging(builder.Configuration);
 
 var app = builder.Build();
 
@@ -27,6 +28,8 @@ app.UseIdentityServer();
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
+
+app.AddMiddlewaresLogging();
 
 app.MapControllers().RequireAuthorization("ApiScope");
 

@@ -25,7 +25,8 @@ namespace Currency.Application.Helpers
                 UserClaims =
                 {
                     "currency_provider",
-                    JwtClaimTypes.Role
+                    JwtClaimTypes.Role,
+                    "rate_limit",
                 }
             }
         ];
@@ -39,6 +40,7 @@ namespace Currency.Application.Helpers
                 {
                     "currency_provider",
                     JwtClaimTypes.Role,
+                    "rate_limit",
                 }
             }
         ];
@@ -61,6 +63,7 @@ namespace Currency.Application.Helpers
                 Claims =
                 [
                     new Claim("currency_provider", "openexchange"),
+                    new Claim("rate_limit", "2"),
                 ]
             },
             new TestUser
@@ -71,7 +74,8 @@ namespace Currency.Application.Helpers
                 Claims =
                 [
                     new Claim("currency_provider", "frankfurter"),
-                    new Claim(JwtClaimTypes.Role, "Admin")
+                    new Claim(JwtClaimTypes.Role, "Admin"),
+                    new Claim("rate_limit", "5")
                 ]
             }
         ];

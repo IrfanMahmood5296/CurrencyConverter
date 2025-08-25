@@ -14,22 +14,21 @@ namespace Currency.Application.Models
         public DateTime? StartDate { get; set; } = null;
     }
 
-    public class HistoricalRequest: CommonFields
+    public class HistoricalRequest : CommonFields
     {
-
         public DateTime? StartDate { get; set; } = null;
         public DateTime? EndDate { get; set; } = null;
-       
+        public int PageNumber { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
     }
 
     public abstract class CommonFields
     {
-        [OptionalCurrencyCode]
-        public string? BaseCurrency { get; set; } = null;
+        [SingleCurrencyCode] // 👈 strictly one code only
+        public string BaseCurrency { get; set; } = string.Empty;
 
-        [OptionalCurrencyCode]
+        [CurrencySymbols] // 👈 can be multiple codes
         public string? Symbols { get; set; }
-
         public virtual bool IsValid(out string errorMessage)
         {
             if (CurrencyConstants.ExcludedCurrencies.Contains(BaseCurrency.ToUpperInvariant()))
@@ -57,19 +56,59 @@ namespace Currency.Application.Models
         }
     }
 
-    public class OptionalCurrencyCodeAttribute : ValidationAttribute
+    public class CurrencySymbolsAttribute : ValidationAttribute
     {
-        protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+        protected override ValidationResult IsValid(object value, ValidationContext validationContext)
         {
             if (value is string str && !string.IsNullOrWhiteSpace(str))
             {
-                if (str.Length != 3 || !Regex.IsMatch(str, "^[A-Z]{3}$"))
+                var codes = str.Split(',')
+                               .Select(s => s.Trim())
+                               .ToList();
+
+                foreach (var code in codes)
                 {
-                    return new ValidationResult($"{validationContext.MemberName} must be 3 uppercase letters");
+                    if (code.Length != 3 || !Regex.IsMatch(code, "^[A-Z]{3}$"))
+                    {
+                        // Force error key to "symbols"
+                        return new ValidationResult(
+                            $"symbols must contain only 3-letter uppercase currency codes separated by commas. Invalid: {code}",
+                            new[] { "symbols" }
+                        );
+                    }
                 }
             }
 
-            return ValidationResult.Success;
+            return ValidationResult.Success!;
+        }
+    }
+
+    /// <summary>
+    /// Validates that a property contains exactly one 3-letter uppercase code.
+    /// Used for baseCurrency.
+    /// </summary>
+    public class SingleCurrencyCodeAttribute : ValidationAttribute
+    {
+        protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+        {
+            if (value is string str && !string.IsNullOrWhiteSpace(str))
+            {
+                if (str.Contains(",")) // ❌ no multiple codes
+                {
+                    return new ValidationResult(
+                        $"{validationContext.MemberName} must contain exactly one 3-letter uppercase currency code (no commas)."
+                    );
+                }
+
+                if (str.Length != 3 || !Regex.IsMatch(str, "^[A-Z]{3}$"))
+                {
+                    return new ValidationResult(
+                        $"{validationContext.MemberName} must be a 3-letter uppercase currency code."
+                    );
+                }
+            }
+
+            return ValidationResult.Success!;
         }
     }
 

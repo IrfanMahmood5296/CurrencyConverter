@@ -1,6 +1,8 @@
 ﻿using Currency.Application.Interfaces;
 using Currency.Application.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 
@@ -11,18 +13,24 @@ namespace Currency.Application.Services
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<FrankFurterProviderService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public FrankFurterProviderService(HttpClient httpClient, ILogger<FrankFurterProviderService> logger)
+        public FrankFurterProviderService(HttpClient httpClient, ILogger<FrankFurterProviderService> logger, IHttpContextAccessor httpContextAccessor)
         {
             _logger = logger;
             _httpClient = httpClient;
-            _httpClient.BaseAddress = new Uri("https://api.frankfurter.app/");
+            _httpClient.BaseAddress = new Uri("http://api.frankfurter.app/");
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
         {
-            _logger.LogInformation("Fetching latest rates. BaseCurrency={Base}, Symbols={Symbols}, StartDate={StartDate}",
-                ratesRequest.BaseCurrency, ratesRequest.Symbols, ratesRequest.StartDate);
+            var (correlationId, clientId) = GetLogContext();
+
+            _logger.LogInformation(
+                "Fetching latest rates {@RatesRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
+                ratesRequest, correlationId, clientId);
+
 
             try
             {
@@ -47,31 +55,40 @@ namespace Currency.Application.Services
                 if (queryParams.Any())
                     endpoint += "?" + string.Join("&", queryParams);
 
-                _logger.LogDebug("Requesting endpoint: {Endpoint}", endpoint);
+                _logger.LogDebug(
+                    "Requesting endpoint {Endpoint} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    endpoint, correlationId, clientId);
 
                 var response = await _httpClient.GetFromJsonAsync<RateResponse>(endpoint);
 
-                if (response == null)
+                if (response?.Rates == null)
                 {
-                    _logger.LogError("Failed to fetch currency rates from endpoint {Endpoint}", endpoint);
+                    _logger.LogError(
+                        "Failed to fetch currency rates from endpoint {Endpoint} CorrelationId={CorrelationId} ClientId={ClientId}",
+                        endpoint, correlationId, clientId);
                     throw new Exception("Failed to fetch currency rates.");
                 }
 
-                _logger.LogInformation("Successfully fetched latest rates for Base={Base}", ratesRequest.BaseCurrency);
-                return response;
+                _logger.LogInformation(
+                    "Successfully fetched latest rates for Base={BaseCurrency} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    ratesRequest.BaseCurrency, correlationId, clientId); return response;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while fetching latest rates");
+                _logger.LogError(ex,
+                    "Error while fetching latest rates {@RatesRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    ratesRequest, correlationId, clientId);
                 throw;
             }
         }
 
         public async Task<HistoricalRateResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest)
         {
-            _logger.LogInformation("Fetching historical rates. Base={Base}, Symbols={Symbols}, From={From}, To={To}",
-                ratesRequest.BaseCurrency, ratesRequest.Symbols, ratesRequest.StartDate, ratesRequest.EndDate);
+            var (correlationId, clientId) = GetLogContext();
 
+            _logger.LogInformation(
+                "Fetching historical rates {@HistoricalRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
+                ratesRequest, correlationId, clientId);
             try
             {
                 string endpoint;
@@ -96,42 +113,73 @@ namespace Currency.Application.Services
                 if (queryParams.Any())
                     endpoint += "?" + string.Join("&", queryParams);
 
-                _logger.LogDebug("Requesting endpoint: {Endpoint}", endpoint);
+                _logger.LogDebug(
+                    "Requesting historical endpoint {Endpoint} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    endpoint, correlationId, clientId);
 
                 var historical = await _httpClient.GetFromJsonAsync<HistoricalRateResponse>(endpoint);
-                if (historical == null)
+
+                if (historical?.HistoricalRates == null || historical.HistoricalRates.Count == 0)
                 {
-                    _logger.LogError("Failed to fetch historical rates from endpoint {Endpoint}", endpoint);
+                    _logger.LogError(
+                        "Failed to fetch historical rates from endpoint {Endpoint} CorrelationId={CorrelationId} ClientId={ClientId}",
+                        endpoint, correlationId, clientId);
                     throw new Exception("Failed to fetch historical currency rates.");
                 }
 
-                _logger.LogInformation("Successfully fetched historical rates from {From} to {To}",
-                    ratesRequest.StartDate, ratesRequest.EndDate);
+                _logger.LogInformation(
+                    "Successfully fetched historical rates from {StartDate} to {EndDate} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    ratesRequest.StartDate, ratesRequest.EndDate, correlationId, clientId);
+
+                var all = historical.HistoricalRates.Select(kv => new HistoricalRateItem
+                {
+                    Date = DateTime.Parse(kv.Key),
+                    Rates = kv.Value,
+                }).OrderByDescending(x => x.Date).ToList();
+
+                var total = all.Count;
+                var totalPages = (int)Math.Ceiling(total / (double)ratesRequest.PageSize);
+
+                var items = all.Skip((ratesRequest.PageNumber - 1) * ratesRequest.PageSize).Take(ratesRequest.PageSize).ToList();
 
                 return new HistoricalRateResponse
                 {
-                    Date = ratesRequest.StartDate ?? DateTime.MinValue,
-                    DateTo = ratesRequest.EndDate ?? DateTime.MinValue,
-                    HistoricalRates = historical.HistoricalRates
+                    HistoricalRates = historical.HistoricalRates,
+                    BaseCurrency = historical.BaseCurrency,
+                    Date = ratesRequest.StartDate,
+                    DateTo = ratesRequest.EndDate,
+                    items = items,
+                    Page = ratesRequest.PageNumber,
+                    PageSize = ratesRequest.PageSize,
+                    TotalItems = total,
+                    TotalPages = totalPages
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while fetching historical rates");
+                _logger.LogError(ex,
+                    "Error while fetching historical rates {@HistoricalRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    ratesRequest, correlationId, clientId);
                 throw;
             }
         }
 
         public async Task<ConvertExchangeRatesRequest> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
         {
-            _logger.LogInformation("Converting currency. From={From}, To={To}, Amount={Amount}",
-                ratesRequest.From, ratesRequest.To, ratesRequest.Amount);
+            var (correlationId, clientId) = GetLogContext();
+
+            _logger.LogInformation(
+                "Converting currency {@ConvertRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
+                ratesRequest, correlationId, clientId);
 
             try
             {
                 if (string.IsNullOrWhiteSpace(ratesRequest.From) || string.IsNullOrWhiteSpace(ratesRequest.To))
                 {
-                    _logger.LogWarning("Invalid conversion request: From={From}, To={To}", ratesRequest.From, ratesRequest.To);
+                    _logger.LogWarning(
+                        "Invalid conversion request From={From} To={To} CorrelationId={CorrelationId} ClientId={ClientId}",
+                        ratesRequest.From, ratesRequest.To, correlationId, clientId);
+
                     throw new ArgumentException("Currency codes must be provided.");
                 }
 
@@ -142,7 +190,10 @@ namespace Currency.Application.Services
 
                 if (response == null)
                 {
-                    _logger.LogError("Failed to fetch conversion rate from endpoint {Endpoint}", endpoint);
+                    _logger.LogError(
+                        "Failed to fetch conversion rate from endpoint {Endpoint} CorrelationId={CorrelationId} ClientId={ClientId}",
+                        endpoint, correlationId, clientId);
+
                     throw new Exception("Failed to fetch conversion rate.");
                 }
 
@@ -157,18 +208,33 @@ namespace Currency.Application.Services
                         kvp => Math.Round(ratesRequest.Amount * kvp.Value, 2))
                 };
 
-                _logger.LogInformation("Conversion completed. From={From}, To={To}, Amount={Amount}, Converted={Converted}",
-                    ratesRequest.From, ratesRequest.To, ratesRequest.Amount,
-                    string.Join(", ", result.ConvertedAmounts.Select(kvp => $"{kvp.Key}:{kvp.Value}")));
+                _logger.LogInformation(
+                    "Conversion completed From={From} To={To} Amount={Amount} Converted={Converted} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    ratesRequest.From,
+                    ratesRequest.To,
+                    ratesRequest.Amount,
+                    string.Join(", ", result.ConvertedAmounts.Select(kvp => $"{kvp.Key}:{kvp.Value}")),
+                    correlationId,
+                    clientId
+                );
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while converting currency. From={From}, To={To}, Amount={Amount}",
-                    ratesRequest.From, ratesRequest.To, ratesRequest.Amount);
+                _logger.LogError(ex,
+                    "Error while converting currency {@ConvertRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
+                    ratesRequest, correlationId, clientId);
                 throw;
             }
+        }
+
+        private (string CorrelationId, string ClientId) GetLogContext()
+        {
+            var context = _httpContextAccessor.HttpContext;
+            var correlationId = context?.Request.Headers["X-Correlation-ID"].ToString() ?? "no-correlation-id";
+            var clientId = context?.User.FindFirst("client_id")?.Value ?? "anonymous";
+            return (correlationId, clientId);
         }
     }
 }

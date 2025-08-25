@@ -1,0 +1,78 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace Currency.Application.Helpers.Middleware
+{
+    public class UserRateLimitMiddleware
+    {
+        private readonly RequestDelegate _next;
+        private readonly ILogger<UserRateLimitMiddleware> _logger;
+        private readonly IConnectionMultiplexer _redis;
+
+        // Store client request info
+        private static readonly Dictionary<string, (DateTime window, int count)> _clients = new();
+        private readonly int _limit = 5; 
+        private readonly TimeSpan _window = TimeSpan.FromMinutes(1);
+
+        public UserRateLimitMiddleware(RequestDelegate next, ILogger<UserRateLimitMiddleware> logger, IConnectionMultiplexer redis)
+        {
+            _next = next;
+            _logger = logger;
+            _redis = redis;
+        }
+
+        public async Task InvokeAsync(HttpContext context)
+        {
+            // Ensure user is authenticated
+            if (!context.User.Identity?.IsAuthenticated ?? true)
+            {
+                await _next(context);
+                return;
+            }
+
+            // Get user ID or client ID
+            string userId = context.User.FindFirst("client_id")?.Value ?? "unknown";
+
+
+            int limit = int.TryParse(context.User.FindFirst("rate_limit")?.Value, out var l) ? l : 3;
+            int windowSeconds = 60;
+
+            var db = _redis.GetDatabase();
+            var key = $"ratelimit:user:{userId}";
+
+            var count = await db.StringIncrementAsync(key);
+            if (count == 1)
+                await db.KeyExpireAsync(key, TimeSpan.FromSeconds(windowSeconds));
+
+            if (count > limit)
+            {
+                _logger.LogWarning("User {UserId} exceeded rate limit of {Limit} requests in {WindowSeconds}s. Current count: {Count}",
+                    userId, limit, windowSeconds, count);
+
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                context.Response.Headers["Retry-After"] = windowSeconds.ToString();
+
+                var errorResponse = new
+                {
+                    Error = "RateLimitExceeded",
+                    Message = $"You have exceeded the allowed {limit} requests per {windowSeconds} seconds. Please try again later.",
+                    Limit = limit,
+                    WindowSeconds = windowSeconds,
+                    RetryAfterSeconds = windowSeconds
+                };
+
+                await context.Response.WriteAsJsonAsync(errorResponse);
+                return;
+            }
+
+            _logger.LogInformation("User {UserId} request allowed. Count {Count}/{Limit} in {WindowSeconds}s window.",
+                userId, count, limit, windowSeconds);
+
+            await _next(context);
+        }
+    }
+}
