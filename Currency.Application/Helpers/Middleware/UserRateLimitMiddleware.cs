@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Currency.Application.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System;
@@ -12,17 +13,14 @@ namespace Currency.Application.Helpers.Middleware
         private readonly RequestDelegate _next;
         private readonly ILogger<UserRateLimitMiddleware> _logger;
         private readonly IConnectionMultiplexer _redis;
+        private readonly IClaimService _claimService;
 
-        // Store client request info
-        private static readonly Dictionary<string, (DateTime window, int count)> _clients = new();
-        private readonly int _limit = 5; 
-        private readonly TimeSpan _window = TimeSpan.FromMinutes(1);
-
-        public UserRateLimitMiddleware(RequestDelegate next, ILogger<UserRateLimitMiddleware> logger, IConnectionMultiplexer redis)
+        public UserRateLimitMiddleware(RequestDelegate next, ILogger<UserRateLimitMiddleware> logger, IConnectionMultiplexer redis, IClaimService claimService)
         {
             _next = next;
             _logger = logger;
             _redis = redis;
+            _claimService = claimService;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -35,10 +33,10 @@ namespace Currency.Application.Helpers.Middleware
             }
 
             // Get user ID or client ID
-            string userId = context.User.FindFirst("client_id")?.Value ?? "unknown";
+            string? userId = _claimService.GetClientId();
 
 
-            int limit = int.TryParse(context.User.FindFirst("rate_limit")?.Value, out var l) ? l : 3;
+            int limit = _claimService.GetRateLimit();
             int windowSeconds = 60;
 
             var db = _redis.GetDatabase();

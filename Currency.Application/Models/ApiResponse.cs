@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 
 namespace Currency.Application.Models
 {
-    public class TokenRequest
+    public class ApiResponse
     {
-        public required string Username { get; set; }
-        public required string Password { get; set; }
+        public object? Data { get; set; }
     }
 }

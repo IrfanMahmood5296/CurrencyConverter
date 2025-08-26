@@ -1,7 +1,6 @@
-﻿using Currency.Application.Interfaces;
-using Currency.Application.Models;
-using Currency.Application.Services;
-using Microsoft.AspNetCore.Authorization;
+﻿using Currency.Application.Models;
+using Currency.Application.Models.Request;
+using Currency.Application.Models.Response;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CurrencyConverter.Web.Controllers

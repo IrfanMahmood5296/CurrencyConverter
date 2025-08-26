@@ -1,11 +1,10 @@
-﻿using Currency.Application.Constants;
-using Currency.Application.Interfaces;
+﻿using Currency.Application.Interfaces;
 using Currency.Application.Interfaces.Redis;
 using Currency.Application.Models;
+using Currency.Application.Models.Request;
+using Currency.Application.Models.Response;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.Extensions.Logging;
 
 namespace Currency.WebApi.Controllers
 {
@@ -17,12 +16,14 @@ namespace Currency.WebApi.Controllers
         private readonly IProviderFactoryService _providerFactoryService;
         private readonly IRedisCacheService _cacheService;
         private readonly ILogger<RatesController> _logger;
+        private readonly IClaimService _claimService;
 
-        public RatesController(IProviderFactoryService providerFactoryService, IRedisCacheService cacheService, ILogger<RatesController> logger)
+        public RatesController(IProviderFactoryService providerFactoryService, IRedisCacheService cacheService, ILogger<RatesController> logger, IClaimService claimService)
         {
             _providerFactoryService = providerFactoryService;
             _cacheService = cacheService;
             _logger = logger;
+            _claimService = claimService;
         }
 
         [Authorize(Roles = "Admin")]
@@ -31,7 +32,7 @@ namespace Currency.WebApi.Controllers
         {
             try
             {
-                var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
+                var providerName = _claimService.GetCurrencyProvider();
 
                 if (string.IsNullOrEmpty(providerName))
                     return BadRequest(new
@@ -43,7 +44,7 @@ namespace Currency.WebApi.Controllers
 
                 var cacheKey = $"{providerName}:latest:{ratesRequest.BaseCurrency ?? ""}_{ratesRequest.Symbols ?? ""}_{ratesRequest.StartDate ?? null}";
 
-                var cachedResult = await _cacheService.GetAsync<object>(cacheKey);
+                var cachedResult = await _cacheService.GetAsync<RateResponse>(cacheKey);
                 if (cachedResult != null)
                 {
                     _logger.LogInformation("Cache hit for {CacheKey}", cacheKey);
@@ -54,27 +55,23 @@ namespace Currency.WebApi.Controllers
 
                 var result = await service.GetLatestRatesAsync(ratesRequest);
 
-                await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(2));
-
-                return Ok(result);
+                return Ok(result.Data);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unhandled exception while fetching rates");
-                return StatusCode(500, new { Error = "InternalServerError", Message = "An unexpected error occurred.", Details = ex.Message, Timestamp = DateTime.UtcNow });
+                return StatusCode(500, new { Error = "InternalServerError", Message = ex.Message, Timestamp = DateTime.UtcNow });
             }
 
         }
 
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpPost("GetHistoricalExchangeRates")]
         public async Task<IActionResult> GetHistoricalExchangeRates([FromBody] HistoricalRequest ratesRequest)
         {
             try
             {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-                var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
+                var providerName = _claimService.GetCurrencyProvider();
 
                 if (string.IsNullOrEmpty(providerName))
                     return BadRequest(new
@@ -100,12 +97,12 @@ namespace Currency.WebApi.Controllers
                     var totalPages = (int)Math.Ceiling(total / (double)ratesRequest.PageSize);
 
                     var items = all.Skip((ratesRequest.PageNumber - 1) * ratesRequest.PageSize).Take(ratesRequest.PageSize).ToList();
-                    return Ok(new HistoricalRateResponse
+                    return Ok(new HistoricalRateApiResponse
                     {
                         BaseCurrency = cachedResult.BaseCurrency,
-                        Date = cachedResult.Date,
-                        DateTo = cachedResult.DateTo,
-                        items = items,
+                        StartDate = cachedResult.StartDate,
+                        EndDate = cachedResult.EndDate,
+                        HistoricalRates = items,
                         Page = ratesRequest.PageNumber,
                         PageSize = ratesRequest.PageSize,
                         TotalItems = total,
@@ -118,19 +115,8 @@ namespace Currency.WebApi.Controllers
                 var service = _providerFactoryService.GetRequiredService(providerName);
 
                 var result = await service.GetHistoricalExchangeRates(ratesRequest);
-                //await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(1));
 
-                return Ok(new HistoricalRateResponse
-                {
-                    BaseCurrency = result.BaseCurrency,
-                    Date = result.Date,
-                    DateTo = result.DateTo,
-                    items = result.items,
-                    Page = ratesRequest.PageNumber,
-                    PageSize = ratesRequest.PageSize,
-                    TotalItems = result.TotalItems,
-                    TotalPages = result.TotalPages
-                });
+                return Ok(result.Data);
             }
             catch (Exception ex)
             {
@@ -157,7 +143,7 @@ namespace Currency.WebApi.Controllers
                     });
                 }
 
-                var providerName = User.Claims.FirstOrDefault(c => c.Type == "currency_provider")?.Value;
+                var providerName = _claimService.GetCurrencyProvider();
 
                 if (string.IsNullOrEmpty(providerName))
                     return BadRequest(new
@@ -174,7 +160,7 @@ namespace Currency.WebApi.Controllers
                 _logger.LogInformation("Currency conversion successful: {Amount} {From} to {To}",
                     ratesRequest.Amount, ratesRequest.From, ratesRequest.To);
 
-                return Ok(result);
+                return Ok(result.Data);
             }
             catch (Exception ex)
             {

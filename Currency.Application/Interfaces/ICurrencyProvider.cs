@@ -1,4 +1,5 @@
 ﻿using Currency.Application.Models;
+using Currency.Application.Models.Request;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,8 +10,8 @@ namespace Currency.Application.Interfaces
 {
     public interface ICurrencyProvider
     {
-        Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest);
-        Task<HistoricalRateResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest);
-        Task<ConvertExchangeRatesRequest> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest);
+        Task<ApiResponse> GetLatestRatesAsync(RatesRequest ratesRequest);
+        Task<ApiResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest);
+        Task<ApiResponse> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest);
     }
 }

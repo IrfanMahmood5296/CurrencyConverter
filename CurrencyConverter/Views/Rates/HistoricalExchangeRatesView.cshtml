@@ -1,4 +1,4 @@
-﻿@model Currency.Application.Models.HistoricalRateResponse
+﻿@model Currency.Application.Models.Response.HistoricalRateResponse
 
 @{
     ViewData["Title"] = "Latest Historical Rates ";
@@ -8,13 +8,13 @@
     <h2>@ViewData["Title"]</h2>
     <p>
         <strong>Date:</strong>
-        @if (Model.DateTo.HasValue)
+        @if (Model.StartDate.HasValue)
         {
-            @($"{Model.Date:yyyy-MM-dd} - {Model.DateTo:yyyy-MM-dd}")
+            @($"{Model.StartDate:yyyy-MM-dd} - {Model.EndDate:yyyy-MM-dd}")
         }
         else
         {
-            @Model.Date?.ToString("yyyy-MM-dd")
+            @Model.StartDate?.ToString("yyyy-MM-dd")
         }
     </p>
 

@@ -2,6 +2,7 @@
 using Polly;
 using Polly.Extensions.Http;
 using Polly.Timeout;
+using System.Net;
 
 public static class PollyRetryExtensions
 {
@@ -9,31 +10,32 @@ public static class PollyRetryExtensions
     {
         return HttpPolicyExtensions
             .HandleTransientHttpError()
+            .OrResult(r => r.StatusCode == HttpStatusCode.BadGateway)
             .Or<TaskCanceledException>() // includes request timeouts
             .WaitAndRetryAsync(
                 3,
                 retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
                 (outcome, timespan, retryAttempt, context) =>
                 {
+                    var reason = outcome.Exception?.Message
+                                 ?? $"{(int)outcome.Result!.StatusCode} {outcome.Result.StatusCode}";
                     logger.LogWarning("Retry {RetryAttempt} after {Delay} due to {Reason}",
-                        retryAttempt,
-                        timespan,
-                        outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString());
+                        retryAttempt, timespan, reason);
                 });
     }
 
     public static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy(ILogger logger)
     {
         return HttpPolicyExtensions
-            .HandleTransientHttpError()
+            .HandleTransientHttpError().OrResult(r => r.StatusCode == HttpStatusCode.BadGateway)
             .CircuitBreakerAsync(
                 5, // break after 5 failures
                 TimeSpan.FromSeconds(30), // break duration
                 onBreak: (outcome, timespan) =>
                 {
-                    logger.LogError("Circuit broken for {TimeSpan} due to {Reason}",
-                        timespan,
-                        outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString());
+                    var reason = outcome.Exception?.Message
+                                 ?? $"{(int)outcome.Result!.StatusCode} {outcome.Result.StatusCode}";
+                    logger.LogError("Circuit broken for {TimeSpan} due to {Reason}", timespan, reason);
                 },
                 onReset: () => logger.LogInformation("Circuit reset."),
                 onHalfOpen: () => logger.LogInformation("Circuit half-open, next call is trial.")

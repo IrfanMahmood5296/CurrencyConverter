@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Currency.Application.Models
+namespace Currency.Application.Models.Request
 {
     public class LoginRequest
     {

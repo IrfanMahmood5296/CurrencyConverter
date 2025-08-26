@@ -9,39 +9,57 @@ namespace Currency.Application.Helpers
     {
         public static IEnumerable<Client> Clients =>
         [
+            // Frankfurter client — only for frankfurter users
             new Client
             {
-                ClientId = "my_client",
-                AllowedGrantTypes = IdentityServer4.Models.GrantTypes.ResourceOwnerPassword,
-                ClientSecrets = { new Secret("my_secret".ToSha256()) },
-                AllowedScopes = { "currency_api", "openid", "profile" },
-            }
-         ];
-
-        public static IEnumerable<ApiScope> ApiScopes =>
-        [
-            new ApiScope("currency_api", "Currency API")
-            {
-                UserClaims =
+                ClientId = "frankfurter",
+                AllowedGrantTypes = GrantTypes.ResourceOwnerPassword,
+                ClientSecrets = { new Secret("frankfurter_secret".ToSha256()) },
+                AllowedScopes =
                 {
-                    "currency_provider",
-                    JwtClaimTypes.Role,
-                    "rate_limit",
-                }
+                    "currency_api.frankfurter", 
+                    "openid", "profile", "roles"
+                },
+                AccessTokenLifetime = 3600,
+                AllowOfflineAccess = false
+            },
+
+            // OpenExchange client — only for openexchange users
+            new Client
+            {
+                ClientId = "openexchange",
+                AllowedGrantTypes = GrantTypes.ResourceOwnerPassword,
+                ClientSecrets = { new Secret("openexchange_secret".ToSha256()) },
+                AllowedScopes =
+                {
+                    "currency_api.openexchange",
+                    "openid", "profile", "roles"
+                },
+                AccessTokenLifetime = 1800,
+                AllowOfflineAccess = false
             }
         ];
 
+        // Distinct scopes per provider
+        public static IEnumerable<ApiScope> ApiScopes =>
+        [
+            new ApiScope("currency_api.frankfurter", "Currency API (Frankfurter)")
+            {
+                UserClaims = { "currency_provider", JwtClaimTypes.Role, "rate_limit" }
+            },
+            new ApiScope("currency_api.openexchange", "Currency API (OpenExchange)")
+            {
+                UserClaims = { "currency_provider", JwtClaimTypes.Role, "rate_limit" }
+            }
+        ];
+
+        // One API resource that exposes both scopes
         public static IEnumerable<ApiResource> ApiResources =>
         [
             new ApiResource("currency_api", "Currency API")
             {
-                Scopes = { "currency_api" },
-                UserClaims =
-                {
-                    "currency_provider",
-                    JwtClaimTypes.Role,
-                    "rate_limit",
-                }
+                Scopes = { "currency_api.frankfurter", "currency_api.openexchange" },
+                UserClaims = { "currency_provider", JwtClaimTypes.Role, "rate_limit" }
             }
         ];
 
@@ -50,26 +68,29 @@ namespace Currency.Application.Helpers
             new IdentityResources.OpenId(),
             new IdentityResources.Profile(),
             new IdentityResource("roles", "User roles", new[] { JwtClaimTypes.Role })
-
-         ];
+        ];
 
         public static List<TestUser> Users =>
         [
+            // OpenExchange user(s)
             new TestUser
             {
-                SubjectId = "1",
-                Username = "user1",
+                SubjectId = "1001",
+                Username = "oe_user",
                 Password = "password1",
                 Claims =
                 [
                     new Claim("currency_provider", "openexchange"),
-                    new Claim("rate_limit", "2"),
+                    new Claim(JwtClaimTypes.Role, "User"),
+                    new Claim("rate_limit", "2")
                 ]
             },
+
+            // Frankfurter user(s)
             new TestUser
             {
-                SubjectId = "2",
-                Username = "user2",
+                SubjectId = "2001",
+                Username = "ff_admin",
                 Password = "password2",
                 Claims =
                 [

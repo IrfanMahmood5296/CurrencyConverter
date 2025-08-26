@@ -1,8 +1,10 @@
 ﻿using Currency.Application.Interfaces;
+using Currency.Application.Interfaces.Redis;
 using Currency.Application.Models;
+using Currency.Application.Models.Request;
+using Currency.Application.Models.Response;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 
@@ -13,25 +15,25 @@ namespace Currency.Application.Services
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<FrankFurterProviderService> _logger;
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IClaimService _claimService;
+        private readonly IRedisCacheService _cacheService;
 
-        public FrankFurterProviderService(HttpClient httpClient, ILogger<FrankFurterProviderService> logger, IHttpContextAccessor httpContextAccessor)
+        public FrankFurterProviderService(HttpClient httpClient, ILogger<FrankFurterProviderService> logger,IClaimService claimService, IRedisCacheService cacheService)
         {
             _logger = logger;
             _httpClient = httpClient;
             _httpClient.BaseAddress = new Uri("http://api.frankfurter.app/");
-            _httpContextAccessor = httpContextAccessor;
+            _claimService = claimService;
+            _cacheService = cacheService;
         }
 
-        public async Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
+        public async Task<ApiResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
         {
             var (correlationId, clientId) = GetLogContext();
 
             _logger.LogInformation(
                 "Fetching latest rates {@RatesRequest} CorrelationId={CorrelationId} ClientId={ClientId}",
                 ratesRequest, correlationId, clientId);
-
-
             try
             {
                 string endpoint;
@@ -71,7 +73,13 @@ namespace Currency.Application.Services
 
                 _logger.LogInformation(
                     "Successfully fetched latest rates for Base={BaseCurrency} CorrelationId={CorrelationId} ClientId={ClientId}",
-                    ratesRequest.BaseCurrency, correlationId, clientId); return response;
+                    ratesRequest.BaseCurrency, correlationId, clientId);
+
+                var cacheKey = $"{_claimService.GetCurrencyProvider()}:latest:{ratesRequest.BaseCurrency ?? ""}_{ratesRequest.Symbols ?? ""}_{ratesRequest.StartDate ?? null}";
+
+                await _cacheService.SetAsync(cacheKey, response, TimeSpan.FromMinutes(2));
+
+                return new ApiResponse { Data = response };
             }
             catch (Exception ex)
             {
@@ -82,7 +90,7 @@ namespace Currency.Application.Services
             }
         }
 
-        public async Task<HistoricalRateResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest)
+        public async Task<ApiResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest)
         {
             var (correlationId, clientId) = GetLogContext();
 
@@ -142,17 +150,22 @@ namespace Currency.Application.Services
 
                 var items = all.Skip((ratesRequest.PageNumber - 1) * ratesRequest.PageSize).Take(ratesRequest.PageSize).ToList();
 
-                return new HistoricalRateResponse
+                var cacheKey = $"{_claimService.GetCurrencyProvider()}:historical:{ratesRequest.StartDate:yyyy-MM-dd}_{ratesRequest.EndDate:yyyy-MM-dd}:{ratesRequest.BaseCurrency ?? ""}_{ratesRequest.Symbols ?? ""}";
+                await _cacheService.SetAsync(cacheKey, historical, TimeSpan.FromMinutes(1));
+
+                return new ApiResponse
                 {
-                    HistoricalRates = historical.HistoricalRates,
-                    BaseCurrency = historical.BaseCurrency,
-                    Date = ratesRequest.StartDate,
-                    DateTo = ratesRequest.EndDate,
-                    items = items,
-                    Page = ratesRequest.PageNumber,
-                    PageSize = ratesRequest.PageSize,
-                    TotalItems = total,
-                    TotalPages = totalPages
+                    Data = new HistoricalRateApiResponse
+                    {
+                        BaseCurrency = historical.BaseCurrency,
+                        StartDate = ratesRequest.StartDate,
+                        EndDate = ratesRequest.EndDate,
+                        HistoricalRates = items,
+                        Page = ratesRequest.PageNumber,
+                        PageSize = ratesRequest.PageSize,
+                        TotalItems = total,
+                        TotalPages = totalPages
+                    }
                 };
             }
             catch (Exception ex)
@@ -164,7 +177,7 @@ namespace Currency.Application.Services
             }
         }
 
-        public async Task<ConvertExchangeRatesRequest> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
+        public async Task<ApiResponse> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
         {
             var (correlationId, clientId) = GetLogContext();
 
@@ -197,7 +210,7 @@ namespace Currency.Application.Services
                     throw new Exception("Failed to fetch conversion rate.");
                 }
 
-                var result = new ConvertExchangeRatesRequest
+                var result = new ConvertExchangeRatesResponse
                 {
                     Date = response.Date,
                     From = ratesRequest.From,
@@ -218,7 +231,7 @@ namespace Currency.Application.Services
                     clientId
                 );
 
-                return result;
+                return new ApiResponse { Data = result };
             }
             catch (Exception ex)
             {
@@ -229,11 +242,10 @@ namespace Currency.Application.Services
             }
         }
 
-        private (string CorrelationId, string ClientId) GetLogContext()
+        private (string? CorrelationId, string? ClientId) GetLogContext()
         {
-            var context = _httpContextAccessor.HttpContext;
-            var correlationId = context?.Request.Headers["X-Correlation-ID"].ToString() ?? "no-correlation-id";
-            var clientId = context?.User.FindFirst("client_id")?.Value ?? "anonymous";
+            var correlationId = _claimService.GetCorrelationId();
+            var clientId = _claimService.GetClientId();
             return (correlationId, clientId);
         }
     }

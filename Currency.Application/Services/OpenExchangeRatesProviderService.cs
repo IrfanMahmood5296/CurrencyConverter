@@ -1,13 +1,16 @@
 ﻿using Currency.Application.Interfaces;
 using Currency.Application.Models;
+using Currency.Application.Models.Request;
+using Currency.Application.Models.Response;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http.Json;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Currency.Application.Services
 {
     [Authorize]
-    public class OpenExchangeRatesProviderService: ICurrencyProvider
+    public class OpenExchangeRatesProviderService : ICurrencyProvider
     {
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
@@ -20,20 +23,20 @@ namespace Currency.Application.Services
             _appId = _configuration["OpenExchangeRates:AppId"];
         }
 
-        public async Task<RateResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
+        public async Task<ApiResponse> GetLatestRatesAsync(RatesRequest ratesRequest)
         {
             var endpoint = $"{_appId}/latest/{ratesRequest.BaseCurrency}";
             var queryParams = new List<string> { $"app_id={_appId}" };
 
-            var response = await _httpClient.GetFromJsonAsync<RateResponse>(endpoint);
+            var response = await _httpClient.GetFromJsonAsync<ExchangeRateResponse>(endpoint);
 
             if (response == null)
                 throw new Exception("Failed to fetch currency rates.");
 
-            return response;
+            return new ApiResponse { Data = response };
         }
 
-        public async Task<HistoricalRateResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest)
+        public async Task<ApiResponse> GetHistoricalExchangeRates(HistoricalRequest ratesRequest)
         {
             string endpoint;
 
@@ -61,15 +64,10 @@ namespace Currency.Application.Services
             if (historical == null)
                 throw new Exception("Failed to fetch historical currency rates.");
 
-            return new HistoricalRateResponse
-            {
-                Date = ratesRequest.StartDate ?? DateTime.MinValue,
-                DateTo = ratesRequest.EndDate ?? DateTime.MinValue,
-                HistoricalRates = historical.HistoricalRates
-            };
+            return new ApiResponse { Data = historical };
         }
 
-        public async Task<ConvertExchangeRatesRequest> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
+        public async Task<ApiResponse> ConvertCurrencyAsync(ConvertExchangeRatesRequest ratesRequest)
         {
             if (string.IsNullOrWhiteSpace(ratesRequest.From) || string.IsNullOrWhiteSpace(ratesRequest.To))
                 throw new ArgumentException("Currency codes must be provided.");
@@ -81,13 +79,9 @@ namespace Currency.Application.Services
             if (response == null)
                 throw new Exception("Failed to fetch conversion rate.");
 
-            return new ConvertExchangeRatesRequest
+            return new ApiResponse
             {
-                Date = response.Date,
-                From = ratesRequest.From,
-                To = ratesRequest.To,
-                Amount = ratesRequest.Amount,
-                ConvertedAmounts = response.Rates.ToDictionary(kvp => kvp.Key, kvp => Math.Round(ratesRequest.Amount * kvp.Value, 2))
+
             };
         }
     }

@@ -1,11 +1,6 @@
-﻿using Currency.Application.Helpers;
-using Currency.Application.Models;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using Currency.Application.Models.Request;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Currency.WebApi.Controllers
 {
@@ -35,13 +30,12 @@ namespace Currency.WebApi.Controllers
             {
                 new("password", requestModel.Password),
                 new("username", requestModel.Username),
-                new("client_id", _configuration["IdentityServerConfig:ClientId"]!),
-                new("client_secret", _configuration["IdentityServerConfig:ClientSecret"]!),
+                new("client_id", requestModel.ClientId),
+                new("client_secret", requestModel.ClientSecret),
                 new("grant_type", "password"),
-                new("scope", _configuration["IdentityServerConfig:currency_api"]!)
             };
 
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://localhost:7248/connect/token")
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_configuration["Token:Authority"]}/connect/token")
             {
                 Content = new FormUrlEncodedContent(keyValues)
             };

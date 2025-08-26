@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Currency.Application.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -13,11 +14,12 @@ namespace Currency.Application.Helpers.Extensions
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<RequestLoggingMiddleware> _logger;
-
-        public RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
+        private readonly IClaimService _claimService;
+        public RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger,IClaimService claimService)
         {
             _next = next;
             _logger = logger;
+            _claimService = claimService;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -26,7 +28,7 @@ namespace Currency.Application.Helpers.Extensions
 
             // Capture request info
             var clientIp = context.Connection.RemoteIpAddress?.ToString();
-            var clientId = context.User.FindFirst("client_id")?.Value ?? "anonymous";
+            var clientId = _claimService.GetClientId();
             var method = context.Request.Method;
             var path = context.Request.Path;
 

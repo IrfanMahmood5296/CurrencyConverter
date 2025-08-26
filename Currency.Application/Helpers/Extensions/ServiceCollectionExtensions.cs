@@ -1,9 +1,9 @@
 ﻿using Currency.Application.Helpers.Middleware;
+using Currency.Application.Helpers.Observability;
 using Currency.Application.Interfaces;
 using Currency.Application.Interfaces.Redis;
 using Currency.Application.Services;
 using Currency.Application.Services.Redis;
-using IdentityModel;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,12 +13,7 @@ using Microsoft.OpenApi.Models;
 using Polly;
 using Serilog;
 using StackExchange.Redis;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Currency.Application.Helpers.Extensions
 {
@@ -26,7 +21,9 @@ namespace Currency.Application.Helpers.Extensions
     {
         public static IServiceCollection AddCurrencyProviders(this IServiceCollection services, IConfiguration configuration)
         {
+            services.AddHttpContextAccessor();
             services.AddHttpClient();
+            services.AddTransient<IClaimService, ClaimService>();
 
             services.AddHttpClient<FrankFurterProviderService>()
                 .AddPolicyHandler((sp, _) =>
@@ -38,7 +35,6 @@ namespace Currency.Application.Helpers.Extensions
 
             services.AddTransient<OpenExchangeRatesProviderService>();
             services.AddScoped<IProviderFactoryService, ProviderFactoryService>();
-            services.AddHttpContextAccessor();
             services.AddScoped<IRedisCacheService, RedisCacheService>();
 
             return services;
@@ -51,10 +47,11 @@ namespace Currency.Application.Helpers.Extensions
                 .Enrich.WithMachineName()
                 .Enrich.WithEnvironmentUserName()
                 .Enrich.WithCorrelationId()
-                .Enrich.WithClientIp() // needs Serilog.Enrichers.ClientInfo
+                .Enrich.WithClientIp() 
+                .Enrich.With(new ActivityTraceEnricher())
                 .WriteTo.Console()
                 .WriteTo.File(new Serilog.Formatting.Json.JsonFormatter(), "C:/Logs/log-.json", rollingInterval: RollingInterval.Day)
-                .WriteTo.Seq(configuration["Seq:Url"] ?? "http://localhost:5341")
+                .WriteTo.Seq(configuration["Seq:Url"]!)
                 .CreateLogger();
 
             return hostBuilder.UseSerilog();
@@ -95,11 +92,22 @@ namespace Currency.Application.Helpers.Extensions
 
             services.AddAuthorization(options =>
             {
-                options.AddPolicy("ApiScope", policy =>
-                {
-                    policy.RequireAuthenticatedUser();
-                    policy.RequireClaim("scope", "currency_api");
-                });
+                options.AddPolicy("ApiScopes", policy =>
+                    policy.RequireAssertion(ctx =>
+                    {
+                        // Collect both 'scope' and 'scp' claims (IS/duende vs Azure style)
+                        var rawScopes = ctx.User.FindAll("scope").Select(c => c.Value)
+                            .Concat(ctx.User.FindAll("scp").Select(c => c.Value));
+
+                        foreach (var raw in rawScopes)
+                        {
+                            // Some tokens have multiple scopes in one claim separated by spaces
+                            var scopes = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            if (scopes.Any(s => s.StartsWith("currency_api.", StringComparison.OrdinalIgnoreCase)))
+                                return true;
+                        }
+                        return false;
+                    }));
             });
             return services;
         }

@@ -1,4 +1,5 @@
 ﻿using Currency.Application.Helpers.Extensions;
+using Currency.Application.Helpers.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,6 @@ app.UseAuthorization();
 
 app.AddMiddlewaresLogging();
 
-app.MapControllers().RequireAuthorization("ApiScope");
+app.MapControllers().RequireAuthorization("ApiScopes");
 
 app.Run();
