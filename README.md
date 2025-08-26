@@ -1,10 +1,4 @@
-CurrencyConverter
-Introduction
-CurrencyConverter is an ASP.NET Core based application that provides currency conversion services and exchange rate information. The solution is divided into several projects including a web front‑end with MVC views, a WebAPI secured by IdentityServer, and an application layer that manages currency conversion logic and caching. The application integrates with mulBelow is the complete README documentation for the repository:
-
-------------------------------------------------------------
-
-# CurrencyConverter
+# Currency Converter
 
 ## Introduction
 
