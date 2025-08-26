@@ -43,6 +43,21 @@ C4Context
 ```
 
 ## 📦 Currency.Application
+The Currency.Application project is the core, provider-agnostic domain layer where all business rules, contracts, and cross-cutting concerns live. It supplies:
+
+- Contracts (interfaces) to abstract provider integrations and caching.
+- Models and validation rules for requests/responses.
+- Provider implementations for external APIs (Frankfurter and ExchangeRate-API).
+- Middleware for observability and protection (correlation, rate limiting, structured logging).
+- Dependency injection registrations and Serilog/OpenTelemetry-style logging enrichment.
+- IdentityServer configuration for local development/testing and claim-based behaviors (role, provider, rate limits).
+
+At runtime, the Web API calls into this library to:
+1) Validate incoming request models (e.g., currency codes and exclusions).  
+2) Resolve the proper provider via `IProviderFactoryService` based on the authenticated user’s `currency_provider` claim.  
+3) Use resilient HTTP calls (Polly) to fetch data and cache results in Redis.  
+4) Enrich all logs with correlation/user metadata, apply request logging, and guard APIs with per-user rate limiting.
+
 
 ### 2.1 📜 Constants
 
@@ -133,6 +148,7 @@ Adds `TraceId` and `SpanId` from `System.Diagnostics.Activity` to Serilog events
 ---
 
 ## 🎨 CurrencyConverter (MVC UI)
+The CurrencyConverter MVC UI is the user-facing front-end. It renders Razor views for Latest rates, Historical rates, and Currency Conversion, and delegates all business operations to the Web API via a named HttpClient ("CurrencyApi"). Controllers collect user input (query parameters or form posts), call the corresponding Web API endpoints (POST actions), and then render the returned DTOs in views. The UI is intentionally thin: it performs basic validation, displays errors, and leaves provider selection, caching, rate limiting, and authorization to the API/Application layers.
 
 - **Controllers/**  
   - **HomeController.cs**: Serves home & privacy views  
@@ -149,6 +165,7 @@ Adds `TraceId` and `SpanId` from `System.Diagnostics.Activity` to Serilog events
 ---
 ## 📡 CurrencyConverter.WebApi
 
+The CurrencyConverter.WebApi project exposes the system’s REST endpoints. It enforces JWT bearer authentication and role-based authorization, orchestrates requests using `IClaimService` and `IProviderFactoryService`, and integrates the Redis cache. Each endpoint validates inputs, checks the user’s assigned `currency_provider` claim, optionally serves cached results, and otherwise invokes the appropriate provider in Currency.Application. Cross-cutting middlewares from the Application layer (correlation ID, rate limiting, request logging) can be added to the pipeline for observability and protection.
 ### 4.1 🔌 API Endpoints
 
 #### 1. Get Token
