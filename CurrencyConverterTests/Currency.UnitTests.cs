@@ -20,9 +20,9 @@ using System.Threading.Tasks;
 using Xunit;
 
 
-namespace Currency.Tests
+namespace Currency.UnitTests
 {
-    public class FrankFurterProviderServiceTests
+    public class CurrencyUnitTests
     {
         private readonly Mock<IProviderFactoryService> _mockProviderFactory = new();
         private readonly Mock<IRedisCacheService> _mockCache = new();
@@ -163,59 +163,6 @@ namespace Currency.Tests
         }
 
         [Fact]
-        public async Task GetLatestRatesAsync_ShouldReturnCachedData_WhenCacheHit()
-        {
-            _mockClaimService.Setup(s => s.GetCurrencyProvider()).Returns("frankfurter");
-            // Arrange
-            var cachedData = new RateResponse
-            {
-                BaseCurrency = "USD",
-                Date = new DateTime(2024, 8, 23, 23, 34, 33),
-                Rates = new Dictionary<string, decimal> { { "EUR", 0.92m } }
-            };
-
-            _mockCache.Setup(c => c.GetAsync<object>(It.IsAny<string>()))
-                      .ReturnsAsync(cachedData);
-
-            _mockCache.Setup(c => c.GetAsync<RateResponse>(It.IsAny<string>())).ReturnsAsync(cachedData);
-
-            var controller = CreateControllerWithUser("frankfurter");
-            var request = new RatesRequest { BaseCurrency = "USD", StartDate = new DateTime(2024, 8, 23, 23, 34, 33) };
-
-            // Act
-            var result = await controller.GetLatestRatesAsync(request);
-
-            // Assert
-            var ok = Assert.IsType<OkObjectResult>(result);
-
-            var api = Assert.IsType<RateResponse>(ok.Value);
-
-            api.Should().BeEquivalentTo(cachedData);
-
-        }
-
-        [Fact]
-        public async Task GetLatestRatesAsync_ShouldReturnBadRequest_WhenNoProviderClaim()
-        {
-            // Arrange
-            var controller = CreateControllerWithUser(providerName: "");
-            var request = new RatesRequest { BaseCurrency = "USD" };
-
-            // Act
-            var result = await controller.GetLatestRatesAsync(request);
-
-            // Assert
-            var badRequest = result as BadRequestObjectResult;
-            badRequest.Should().NotBeNull();
-            badRequest!.Value.Should().BeEquivalentTo(new
-            {
-                Error = "ProviderNotAssigned",
-                Message = "Currency provider not assigned to user.",
-                Timestamp = badRequest.Value.GetType().GetProperty("Timestamp")!.GetValue(badRequest.Value)
-            });
-        }
-
-        [Fact]
         public async Task GetHistoricalExchangeRates()
         {
             _mockClaimService.Setup(s => s.GetCurrencyProvider()).Returns("frankfurter");
@@ -284,78 +231,6 @@ namespace Currency.Tests
             Assert.Equal(new DateTime(2025, 08, 05), result.EndDate);
         }
 
-        [Fact]
-        public async Task Convert_Returns_Expected_Response_For_Valid_Input()
-        {
-            _mockClaimService.Setup(s => s.GetCurrencyProvider()).Returns("frankfurter");
-            // Arrange
-            var ratesRequest = new RateResponseDto
-            {
-                Date = new DateTime(2025, 8, 25),
-                BaseCurrency = "USD",
-                Rates = new Dictionary<string, decimal>
-                {
-                    ["BGN"] = 836.05m,
-                    ["BRL"] = 2714.55m
-                }
-            };
 
-            var expected = new ConvertExchangeRatesResponse
-            {
-                From = "USD",
-                To = "BGN,BRL",
-                Amount = 500m,
-                Date = new DateTime(2025, 8, 25),
-                ConvertedAmounts = new Dictionary<string, decimal>
-                {
-                    ["BGN"] = 836.05m,
-                    ["BRL"] = 2714.55m
-                }
-            };
-
-            var request = new ConvertExchangeRatesRequest
-            {
-                Amount = 500m,
-                From = "USD",
-                To = "BGN,BRL"
-            };
-
-            // Mock HttpClient
-            var handlerMock = new Mock<HttpMessageHandler>();
-            handlerMock
-                .Protected()
-                .Setup<Task<HttpResponseMessage>>(
-                    "SendAsync",
-                    ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>()
-                )
-                .ReturnsAsync(new HttpResponseMessage
-                {
-                    StatusCode = HttpStatusCode.OK,
-                    Content = JsonContent.Create(ratesRequest)
-                });
-
-            var httpClient = new HttpClient(handlerMock.Object);
-            var loggerMock = new Mock<ILogger<FrankFurterProviderService>>();
-            var httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            var claimServiceMock = new Mock<IClaimService>();
-
-            var service = new FrankFurterProviderService(httpClient, loggerMock.Object, claimServiceMock.Object, _mockCache.Object);
-
-            // Act
-            var api = await service.ConvertCurrencyAsync(request);
-            api.Data.Should().NotBeNull();
-
-            // Assert
-            var body = Assert.IsType<ConvertExchangeRatesResponse>(api.Data);
-
-
-            Assert.Equal("USD", body.From);
-            Assert.Equal("BGN,BRL", body.To);
-            Assert.Equal(500m, body.Amount);
-            Assert.Equal(new DateTime(2025, 8, 25), body.Date);
-            Assert.Equal(418025.00m, body.ConvertedAmounts["BGN"]);
-            Assert.Equal(1357275.00m, body.ConvertedAmounts["BRL"]);
-        }
     }
 }

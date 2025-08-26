@@ -19,9 +19,12 @@ namespace Currency.WebApi.Controllers
         public async Task<IActionResult> GetToken([FromBody] TokenRequest requestModel)
         {
             if (requestModel == null ||
-            string.IsNullOrEmpty(requestModel.Username) || string.IsNullOrEmpty(requestModel.Password))
+                string.IsNullOrWhiteSpace(requestModel.Username) ||
+                string.IsNullOrWhiteSpace(requestModel.Password) ||
+                string.IsNullOrWhiteSpace(requestModel.ClientId) ||
+                string.IsNullOrWhiteSpace(requestModel.ClientSecret))
             {
-                return BadRequest("Username, Password are required.");
+                return BadRequest("Username, Password, ClientId, and ClientSecret are required.");
             }
 
             using var httpClient = new HttpClient();
